@@ -1,13 +1,43 @@
 import './App.css';
 import { useState, useEffect } from 'react';
+import { servicePiData, serviceWeather } from '../../services/services';
+import PlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-places-autocomplete';
+
+const OneWeekForecast = props => {
+  return (
+    <div>
+      <div>7-Day Forecast {props.label}</div>
+      <ul>
+        {props.forecast.map((item, index) => {
+          const itemDate = new Date(item.dt*1000);
+            return (
+              <li key={index}>Date: {itemDate.toLocaleDateString()} Min: {parseFloat(item.temp.min).toFixed(1)}°C Max: {parseFloat(item.temp.max).toFixed(1)}°C</li>
+            );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function App() {
-  const [forecast, setForecast] = useState([])
-  const [today, setDate] = useState(new Date())
-  const [temp, setTemp] = useState(0);
-  const [hum, setHum] = useState(0);
-  const locale = 'en';
+  // State variables needed for OpenWeatherMap and Google Places Autocomplete APIs
+  const [location, setLocation] = useState('');
+  const [label, setLabel] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [forecast, setForecast] = useState([]);
+  const [cityForecast, setCityForecast] = useState([]);
+  const [citySearch, setCitySearch] = useState(false);
 
+  // State variables needed for Thingspeak API
+  const [temperature, setTemperature] = useState(0);
+  const [humidity, setHumidity] = useState(0);
+  
+  // State variables for time and date
+  const [today, setDate] = useState(new Date());
+  const locale = 'en-PH';
+
+  // FOR TIME DISPLAY
   useEffect(() => {
     const timer = setInterval(() => {
       setDate(new Date());
@@ -17,36 +47,60 @@ function App() {
     }
   }, []);
 
+  // FOR RASPBERRY PI API
   useEffect(() => {
-    const getData = async () => {
-      try {
-        const dataResponse = await fetch('https://api.thingspeak.com/channels/1254631/feeds.json?api_key=API_KEY&results=1');
-        const jsonData = await dataResponse.json()
-        setTemp(parseFloat(jsonData.feeds[0].field1).toFixed(1))
-        setHum(parseFloat(jsonData.feeds[0].field2).toFixed(1))
-      } catch (error) {
-        console.log(error)
-      }
+    const getPiData = async () => {
+      const jsonData = await servicePiData();
+      setTemperature(parseFloat(jsonData.feeds[0].field1).toFixed(1));
+      setHumidity(parseFloat(jsonData.feeds[0].field2).toFixed(1));
     }
-    getData()
-    const measurement = setInterval(getData, 300*1000);
+    getPiData()
+    const measurement = setInterval(getPiData, 300*1000);
     return () => {
       clearInterval(measurement); 
     }
   }, []);
 
+  // FOR MY LOCAL FORECAST
   useEffect(() => {
     const getForecast = async () => {
-      try {
-        const forecastResponse = await fetch('https://api.openweathermap.org/data/2.5/onecall?lat=14.5678&lon=121.1394&exclude=minutely,hourly,alerts&appid=API_KEY');
-        const jsonForecast = await forecastResponse.json();
-        setForecast(jsonForecast.daily);
-      } catch (error) {
-        console.log(error);
-      }
+      const jsonForecast = await serviceWeather("14.5585549", "121.1360819");
+      setForecast(jsonForecast.daily.slice(1));
     }
     getForecast();
   }, [])
+
+  // FOR CITY FORECAST
+  const getCityForecast = async () => {
+    const jsonCityForecast = await serviceWeather(latitude, longitude);
+    setCityForecast(jsonCityForecast.daily.slice(1));
+  }
+
+  const handleChange = address => {
+    setLocation(address);
+  };
+ 
+  const handleSelect = address => {
+    setLocation(address);
+    geocodeByAddress(address)
+      .then(results => getLatLng(results[0]))
+      .then(({ lat, lng }) => {
+        setLatitude(lat);
+        setLongitude(lng);
+      })
+      .catch(error => console.error('Error', error));
+  };
+
+  const search = () => {
+    if (location === '') {
+      setLabel('')
+      setCitySearch(false)
+      return;
+    }
+    setLabel(`for ${location}`)
+    setCitySearch(true)
+    getCityForecast();
+  }
 
   const day = today.toLocaleDateString(locale, { weekday: 'long' });
   const month = today.toLocaleDateString(locale, { month: 'long' });
@@ -56,25 +110,72 @@ function App() {
   const greeting = `Good ${(hour < 12 && 'Morning') || (hour < 18 && 'Afternoon') || 'Evening'}`;
   const time = today.toLocaleTimeString(locale, { hour: 'numeric', hour12: true, minute: 'numeric' });
 
-  const forecastArray = forecast.slice(1);
+  const searchOptions = {
+    types: ['(cities)']
+  }
+
+  let results;
+  
+  if (citySearch) {
+    // if (location === '') {
+    //   results = <div/>;
+    //   setCitySearch(false);
+    // } else {
+    //   results = <OneWeekForecast forecast={cityForecast} label={label}/>
+    // }
+    results = <OneWeekForecast forecast={cityForecast} label={label}/>
+  } else {
+    results = <div/>;
+  }
 
   return (
     <div>
       <div>{greeting}!</div>
       <div>Today is {date} and the time is {time}</div>
-      <div>Temperature: {temp}°C</div>
-      <div>Humidity: {hum}%</div>
+      <div>Temperature: {temperature}°C</div>
+      <div>Humidity: {humidity}%</div>
+      <OneWeekForecast forecast={forecast} label="in My Area"/>
       <div>
-        <div>7-Day Forecast</div>
-        <ul>
-          {forecastArray.map((item, index) => {
-            const itemDate = new Date(item.dt*1000);
-            return (
-              <li key={index}>Date: {itemDate.toLocaleDateString()} Min: {(parseFloat(item.temp.min)/10).toFixed(1)}°C Max: {(parseFloat(item.temp.max)/10).toFixed(1)}°C</li>
-            );
-          })}
-        </ul>
+        <label>Check your city's forecast: </label>
+        <PlacesAutocomplete
+          value={location}
+          onChange={handleChange}
+          onSelect={handleSelect}
+          searchOptions={searchOptions}>
+          {
+            ({ getInputProps, suggestions, getSuggestionItemProps, loading }) => (
+              <div>
+                <input
+                  {...getInputProps({
+                    placeholder: 'Enter a location',
+                    className: 'location-search-input'
+                  })} /> <button onClick={search}>Search</button>
+                <div className="autocomplete-dropdown-container">
+                  {loading && <div>Loading...</div>}
+                  {suggestions.map(suggestion => {
+                    const className = suggestion.active
+                      ? 'suggestion-item--active'
+                      : 'suggestion-item';
+                    const style = suggestion.active
+                      ? { backgroundColor: '#fafafa', cursor: 'pointer' }
+                      : { backgroundColor: '#ffffff', cursor: 'pointer' };
+                    return (
+                      <div key={suggestion.placeId}
+                        {...getSuggestionItemProps(suggestion, {
+                          className,
+                          style,
+                        })}>
+                        <span>{suggestion.description}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )
+          }
+        </PlacesAutocomplete>
       </div>
+      <div>{results}</div>
     </div>
   );
 }
