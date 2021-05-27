@@ -1,23 +1,17 @@
 import './App.css';
-import { useState, useEffect } from 'react';
-import { servicePiData, serviceWeather } from '../../services/services';
-import PlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-places-autocomplete';
+import 'antd/dist/antd.css';
 
-const OneWeekForecast = props => {
-  return (
-    <div>
-      <div>7-Day Forecast {props.label}</div>
-      <ul>
-        {props.forecast.map((item, index) => {
-          const itemDate = new Date(item.dt*1000);
-            return (
-              <li key={index}>Date: {itemDate.toLocaleDateString()} Min: {parseFloat(item.temp.min).toFixed(1)}°C Max: {parseFloat(item.temp.max).toFixed(1)}°C</li>
-            );
-        })}
-      </ul>
-    </div>
-  );
-}
+import { useState, useEffect } from 'react';
+
+import PlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-places-autocomplete';
+import { Input } from 'antd';
+
+import { servicePiData, serviceWeather } from '../../services/services';
+import { OneWeekForecast } from './OneWeekForecast';
+import { GreetingTime } from './GreetingTime';
+import { RPiData } from './RPiData';
+import { SectionLabel } from './SectionLabel';
+import { AutocompleteDropdown } from './AutocompleteDropdown'
 
 function App() {
   // State variables needed for OpenWeatherMap and Google Places Autocomplete APIs
@@ -28,6 +22,7 @@ function App() {
   const [forecast, setForecast] = useState([]);
   const [cityForecast, setCityForecast] = useState([]);
   const [citySearch, setCitySearch] = useState(false);
+  const [localCondition, setLocalCondition] = useState('');
 
   // State variables needed for Thingspeak API
   const [temperature, setTemperature] = useState(0);
@@ -36,6 +31,8 @@ function App() {
   // State variables for time and date
   const [today, setDate] = useState(new Date());
   const locale = 'en-PH';
+
+  const { Search } = Input;
 
   // FOR TIME DISPLAY
   useEffect(() => {
@@ -54,7 +51,7 @@ function App() {
       setTemperature(parseFloat(jsonData.feeds[0].field1).toFixed(1));
       setHumidity(parseFloat(jsonData.feeds[0].field2).toFixed(1));
     }
-    getPiData()
+    getPiData();
     const measurement = setInterval(getPiData, 300*1000);
     return () => {
       clearInterval(measurement); 
@@ -66,8 +63,13 @@ function App() {
     const getForecast = async () => {
       const jsonForecast = await serviceWeather("14.5585549", "121.1360819");
       setForecast(jsonForecast.daily.slice(1));
+      setLocalCondition(jsonForecast.current.weather[0].main);
     }
     getForecast();
+    const localForecast = setInterval(getForecast, 300*1000);
+    return () => {
+      clearInterval(localForecast); 
+    }
   }, [])
 
   // FOR CITY FORECAST
@@ -105,10 +107,10 @@ function App() {
   const day = today.toLocaleDateString(locale, { weekday: 'long' });
   const month = today.toLocaleDateString(locale, { month: 'long' });
   const year = today.toLocaleDateString(locale, { year: 'numeric' });
-  const date = `${day}, ${today.getDate()} ${month} ${year}\n\n`;
+  const date = `${day}, ${today.getDate()} ${month} ${year}`;
   const hour = today.getHours();
   const greeting = `Good ${(hour < 12 && 'Morning') || (hour < 18 && 'Afternoon') || 'Evening'}`;
-  const time = today.toLocaleTimeString(locale, { hour: 'numeric', hour12: true, minute: 'numeric' });
+  const time = today.toLocaleTimeString(locale, { hour: 'numeric', hour12: true, minute: 'numeric' }).toUpperCase();
 
   const searchOptions = {
     types: ['(cities)']
@@ -117,63 +119,73 @@ function App() {
   let results;
   
   if (citySearch) {
-    // if (location === '') {
-    //   results = <div/>;
-    //   setCitySearch(false);
-    // } else {
-    //   results = <OneWeekForecast forecast={cityForecast} label={label}/>
-    // }
-    results = <OneWeekForecast forecast={cityForecast} label={label}/>
+    results = <OneWeekForecast forecast={cityForecast} label={label} locale={locale}/>
   } else {
     results = <div/>;
   }
 
+  let backgroundUrl = '';
+
+  if (localCondition === 'Thunderstorm') {
+    backgroundUrl = 'url(/img/thunderstorm.gif)';
+  } else if (localCondition === 'Drizzle') {
+    backgroundUrl = 'url(/img/drizzle.gif)';
+  } else if (localCondition === 'Rain') {
+    backgroundUrl = 'url(/img/rain.gif)';
+  } else if (localCondition === 'Clear') {
+    if (hour > 6 && hour < 18) {
+      backgroundUrl = 'url(/img/clear.gif)';
+    }
+    backgroundUrl = 'url(/img/clear_night.gif)'; 
+  } else if (localCondition === 'Clouds') {
+    if (hour > 6 && hour < 18) {
+      backgroundUrl = 'url(/img/clouds.gif)';
+    }
+    backgroundUrl = 'url(/img/clouds_night.gif)'; 
+  } else {
+    backgroundUrl = 'none';
+  }
+
   return (
-    <div>
-      <div>{greeting}!</div>
-      <div>Today is {date} and the time is {time}</div>
-      <div>Temperature: {temperature}°C</div>
-      <div>Humidity: {humidity}%</div>
-      <OneWeekForecast forecast={forecast} label="in My Area"/>
-      <div>
-        <label>Check your city's forecast: </label>
-        <PlacesAutocomplete
-          value={location}
-          onChange={handleChange}
-          onSelect={handleSelect}
-          searchOptions={searchOptions}>
-          {
-            ({ getInputProps, suggestions, getSuggestionItemProps, loading }) => (
-              <div>
-                <input
-                  {...getInputProps({
-                    placeholder: 'Enter a location',
-                    className: 'location-search-input'
-                  })} /> <button onClick={search}>Search</button>
-                <div className="autocomplete-dropdown-container">
-                  {loading && <div>Loading...</div>}
-                  {suggestions.map(suggestion => {
-                    const className = suggestion.active
-                      ? 'suggestion-item--active'
-                      : 'suggestion-item';
-                    const style = suggestion.active
-                      ? { backgroundColor: '#fafafa', cursor: 'pointer' }
-                      : { backgroundColor: '#ffffff', cursor: 'pointer' };
-                    return (
-                      <div key={suggestion.placeId}
-                        {...getSuggestionItemProps(suggestion, {
-                          className,
-                          style,
-                        })}>
-                        <span>{suggestion.description}</span>
-                      </div>
-                    );
-                  })}
+    <div 
+      className='root-child'
+      style={{ backgroundImage: `${backgroundUrl}`, backgroundSize: 'cover' }}>
+      
+      <GreetingTime greeting={greeting} date={date} time={time} />
+      <RPiData temperature={temperature} humidity={humidity} />
+      <OneWeekForecast forecast={forecast} label="in My Area" locale={locale}/>
+      
+      <div className='autocomplete-section'>
+        <SectionLabel label="Check your city's forecast" />
+        <div className='autocomplete-search'>
+          <PlacesAutocomplete
+            value={location}
+            onChange={handleChange}
+            onSelect={handleSelect}
+            searchOptions={searchOptions}>
+            {
+              ({ getInputProps, suggestions, getSuggestionItemProps, loading }) => (
+                <div>
+                  <Search
+                    {...getInputProps({
+                      placeholder: 'Enter a location',
+                      className: 'location-search-input'
+                    })}
+                    allowClear
+                    enterButton="Search"
+                    size="large"
+                    onSearch={search}
+                    style={{ width: 500 }}/> 
+
+                  <AutocompleteDropdown 
+                    loading={loading} 
+                    suggestions={suggestions}
+                    getSuggestionItemProps={getSuggestionItemProps}/>
                 </div>
-              </div>
-            )
-          }
-        </PlacesAutocomplete>
+              )
+            }
+          </PlacesAutocomplete>
+        </div>
       </div>
       <div>{results}</div>
     </div>

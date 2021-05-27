@@ -36,3 +36,63 @@
     transform: rotate(360deg);
   }
 }
+
+#root .root-child {
+  height: 100vh;
+  overflow: auto;
+  font-family: 'Roboto';
+}
+
+.greeting-time {
+  text-align: center;
+  margin: 30px;
+}
+
+.data {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
+
+.data > div {
+  margin: 30px;
+}
+
+.forecast {
+  margin: 30px;
+}
+
+.forecast .label {
+  text-align: center;
+}
+
+.forecast .forecast-list {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
+
+.forecast-list > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 8px;
+}
+
+#search-label {
+  text-align: center;
+}
+
+.autocomplete-section {
+  margin: 100px;
+}
+
+.autocomplete-search {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+
+
