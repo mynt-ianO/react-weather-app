@@ -135,13 +135,15 @@ function App() {
   } else if (localCondition === 'Clear') {
     if (hour > 6 && hour < 18) {
       backgroundUrl = 'url(/img/clear.gif)';
-    }
-    backgroundUrl = 'url(/img/clear_night.gif)'; 
+    } else {
+      backgroundUrl = 'url(/img/clear_night.gif)';
+    } 
   } else if (localCondition === 'Clouds') {
     if (hour > 6 && hour < 18) {
       backgroundUrl = 'url(/img/clouds.gif)';
-    }
-    backgroundUrl = 'url(/img/clouds_night.gif)'; 
+    } else {
+      backgroundUrl = 'url(/img/clouds_night.gif)';
+    } 
   } else {
     backgroundUrl = 'none';
   }
